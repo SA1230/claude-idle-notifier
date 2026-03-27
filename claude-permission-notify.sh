@@ -33,5 +33,6 @@ terminal-notifier \
     -message "$BODY" \
     -contentImage "$ICON" \
     -sound "" \
+    -sender com.apple.Finder \
     -group "claude-permission" \
     2>/dev/null

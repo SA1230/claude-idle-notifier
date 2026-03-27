@@ -68,6 +68,7 @@ terminal-notifier \
     -message "$SNIPPET" \
     -contentImage "$ICON_IDLE" \
     -sound "" \
+    -sender com.apple.Finder \
     -group "claude-idle" \
     2>/dev/null
 
