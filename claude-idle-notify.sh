@@ -1,7 +1,7 @@
 #!/bin/bash
 # Claude Code idle notification system
 # Triggered by the Stop hook when Claude finishes its turn.
-# Uses terminal-notifier with distinct icons per notification tier.
+# Uses dialog popup (always visible) + terminal-notifier (for when away).
 
 PID_FILE="/tmp/claude-idle-nudger.pid"
 CONFIG_FILE="$HOME/.claude/notify-config.env"
@@ -61,8 +61,9 @@ fi
 # Grace period — filters out rapid back-and-forth during active conversation
 sleep 8
 
-# First notification — green checkmark icon
+# First notification — dialog popup + notification banner
 afplay /System/Library/Sounds/Glass.aiff 2>/dev/null &
+osascript -e "display dialog \"$SNIPPET\" with title \"$PROJECT\" buttons {\"OK\"} giving up after 10" 2>/dev/null &
 terminal-notifier \
     -title "$PROJECT" \
     -message "$SNIPPET" \
@@ -70,7 +71,7 @@ terminal-notifier \
     -sound "" \
     -sender com.apple.Finder \
     -group "claude-idle" \
-    2>/dev/null
+    2>/dev/null &
 
 ELAPSED=8
 TELEGRAM_INTERVAL=600
@@ -81,15 +82,17 @@ while true; do
     ELAPSED=$((ELAPSED + 90))
     MINUTES=$((ELAPSED / 60))
 
-    # Repeated nudge — amber clock icon
+    # Repeated nudge — dialog + notification
     afplay /System/Library/Sounds/Ping.aiff 2>/dev/null &
+    osascript -e "display dialog \"Still waiting... (${MINUTES}m idle)\" with title \"$PROJECT\" buttons {\"OK\"} giving up after 10" 2>/dev/null &
     terminal-notifier \
         -title "$PROJECT" \
         -message "Still waiting... (${MINUTES}m idle)" \
         -contentImage "$ICON_NUDGE" \
         -sound "" \
+        -sender com.apple.Finder \
         -group "claude-idle" \
-        2>/dev/null
+        2>/dev/null &
 
     # Telegram escalation: first at 5 min, then every 10 min
     if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then

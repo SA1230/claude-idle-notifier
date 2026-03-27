@@ -1,6 +1,6 @@
 #!/bin/bash
 # Urgent notification when Claude is blocked on a permission prompt.
-# Uses terminal-notifier with red exclamation icon.
+# Uses dialog popup (always visible) + terminal-notifier (for when away).
 
 STDIN_JSON=$(cat)
 ICON="$HOME/.claude/scripts/icons/permission.png"
@@ -27,7 +27,10 @@ fi
 # Urgent sound
 afplay /System/Library/Sounds/Funk.aiff 2>/dev/null &
 
-# Notification with red exclamation icon
+# Dialog popup — always shows even when terminal is focused, auto-dismisses after 10s
+osascript -e "display dialog \"$BODY\" with title \"$PROJECT — Action Required\" buttons {\"OK\"} giving up after 10" 2>/dev/null &
+
+# Also send notification banner for when user is away from terminal
 terminal-notifier \
     -title "$PROJECT — Action Required" \
     -message "$BODY" \
@@ -35,4 +38,4 @@ terminal-notifier \
     -sound "" \
     -sender com.apple.Finder \
     -group "claude-permission" \
-    2>/dev/null
+    2>/dev/null &
