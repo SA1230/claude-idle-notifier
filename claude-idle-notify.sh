@@ -58,10 +58,15 @@ if [ -f "$CONTEXT_FILE" ]; then
     ICON_NUDGE=$(jq -r ".icon_nudge" "$CONTEXT_FILE" 2>/dev/null)
 fi
 
+# Hard limit: max 2 reminders per session, then stop
+MAX_REMINDERS=2
+REMINDER_COUNT=0
+
 # Grace period — filters out rapid back-and-forth during active conversation
 sleep 8
 
-# First notification — dialog popup + notification banner
+# Reminder 1 — dialog popup + notification banner
+REMINDER_COUNT=$((REMINDER_COUNT + 1))
 afplay /System/Library/Sounds/Glass.aiff 2>/dev/null &
 osascript -e "display dialog \"$SNIPPET\" with title \"$PROJECT\" buttons {\"OK\"} giving up after 10" 2>/dev/null &
 terminal-notifier \
@@ -73,41 +78,29 @@ terminal-notifier \
     -group "claude-idle" \
     2>/dev/null &
 
-ELAPSED=8
-TELEGRAM_INTERVAL=600
-LAST_TELEGRAM=0
+if [ $REMINDER_COUNT -ge $MAX_REMINDERS ]; then
+    rm -f "$PID_FILE"
+    exit 0
+fi
 
-while true; do
-    sleep 90
-    ELAPSED=$((ELAPSED + 90))
-    MINUTES=$((ELAPSED / 60))
+# Wait 90 seconds for one follow-up
+sleep 90
 
-    # Repeated nudge — dialog + notification
-    afplay /System/Library/Sounds/Ping.aiff 2>/dev/null &
-    osascript -e "display dialog \"Still waiting... (${MINUTES}m idle)\" with title \"$PROJECT\" buttons {\"OK\"} giving up after 10" 2>/dev/null &
-    terminal-notifier \
-        -title "$PROJECT" \
-        -message "Still waiting... (${MINUTES}m idle)" \
-        -contentImage "$ICON_NUDGE" \
-        -sound "" \
-        -sender com.apple.Finder \
-        -group "claude-idle" \
-        2>/dev/null &
+# Reminder 2 — final nudge, then stop
+REMINDER_COUNT=$((REMINDER_COUNT + 1))
+afplay /System/Library/Sounds/Ping.aiff 2>/dev/null &
+osascript -e "display dialog \"Still waiting... (1m idle)\" with title \"$PROJECT\" buttons {\"OK\"} giving up after 10" 2>/dev/null &
+terminal-notifier \
+    -title "$PROJECT" \
+    -message "Still waiting... (1m idle)" \
+    -contentImage "$ICON_NUDGE" \
+    -sound "" \
+    -sender com.apple.Finder \
+    -group "claude-idle" \
+    2>/dev/null &
 
-    # Telegram escalation: first at 5 min, then every 10 min
-    if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
-        if [ $ELAPSED -ge 300 ]; then
-            SINCE_LAST=$((ELAPSED - LAST_TELEGRAM))
-            if [ $LAST_TELEGRAM -eq 0 ] || [ $SINCE_LAST -ge $TELEGRAM_INTERVAL ]; then
-                curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-                    -d chat_id="$TELEGRAM_CHAT_ID" \
-                    -d text="[$PROJECT] ${SNIPPET}... (${MINUTES}m idle)" \
-                    > /dev/null 2>&1
-                LAST_TELEGRAM=$ELAPSED
-            fi
-        fi
-    fi
-done
+# Done. No more reminders. Clean up.
+rm -f "$PID_FILE"
 ' > /dev/null 2>&1 &
 
 # Save the nudger PID so the kill script can stop it
